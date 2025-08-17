@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- This is the most appropriate target framework for the game's Unity version. -->
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <!-- This is the GUID of your mod. Example: com.github.YourAccount.BepInExTemplate -->
+    <AssemblyName>WeForgotBingBong</AssemblyName>
+    <!-- This is the display name of your mod. Example: BepInEx Template -->
+    <AssemblyTitle>WeForgotBingBong</AssemblyTitle>
+    <!-- This is the version number of your mod. -->
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+  <Reference Include="Assembly-CSharp">
+    <HintPath>lib\Assembly-CSharp.dll</HintPath>
+    <Private>False</Private>
+  </Reference>
+  <Reference Include="Zorro.Core.Runtime">
+    <HintPath>lib\Zorro.Core.Runtime.dll</HintPath>
+    <Private>False</Private>
+  </Reference>
+  <Reference Include="PhotonUnityNetworking">
+    <HintPath>lib\PhotonUnityNetworking.dll</HintPath>
+    <Private>False</Private>
+  </Reference>
+  <Reference Include="Sirenix.Serialization">
+    <HintPath>lib\Sirenix.Serialization.dll</HintPath>
+    <Private>False</Private>
+  </Reference>
+</ItemGroup>
+
+</Project>
