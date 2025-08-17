@@ -23,7 +23,7 @@ namespace WeForgotBingBong
 
     // Configs
     private ConfigEntry<float> curseInterval = null!;
-    private ConfigEntry<string> curseType = null!;
+    // private ConfigEntry<string> curseType = null!;
     private ConfigEntry<bool> showUI = null!;
     public ConfigEntry<float> curseIntensity = null!;
     public ConfigEntry<bool> debugMode = null!;
@@ -36,7 +36,7 @@ namespace WeForgotBingBong
       SceneManager.sceneLoaded += OnSceneLoaded;
 
       curseInterval = Config.Bind("General", "CurseInterval", 2f, "施加負面效果的間隔秒數");
-      curseType = Config.Bind("General", "CurseType", "Poison", "負面效果類型，可選 Poison/Injury/Exhaustion/Paranoia");
+      // curseType = Config.Bind("General", "CurseType", "Poison", "負面效果類型，可選 Poison/Injury/Exhaustion/Paranoia");
       showUI = Config.Bind("UI", "ShowBingBongUI", true, "是否在螢幕上顯示 BingBong 狀態");
       curseIntensity = Config.Bind("General", "CurseIntensity", 1.0f, "詛咒效果強度倍數 (0.5-2.0)");
       debugMode = Config.Bind("Debug", "EnableDebugMode", true, "啟用調試模式，顯示詳細日誌");
@@ -72,7 +72,7 @@ namespace WeForgotBingBong
           foundBingBong = true;
 
           var curseLogic = bingBong.AddComponent<BingBongCurseLogic>();
-          curseLogic.Setup(bingBongItemID, curseInterval.Value, curseType.Value, showUI.Value);
+          curseLogic.Setup(bingBongItemID, curseInterval.Value, showUI.Value);
           break;
         }
       }
@@ -89,7 +89,7 @@ namespace WeForgotBingBong
             foundBingBong = true;
 
             var curseLogic = bingBong.AddComponent<BingBongCurseLogic>();
-            curseLogic.Setup(bingBongItemID, curseInterval.Value, curseType.Value, showUI.Value);
+            curseLogic.Setup(bingBongItemID, curseInterval.Value, showUI.Value);
             break;
           }
         }
