@@ -32,9 +32,13 @@ jobs:
       - name: Locate DLL
         id: finddll
         run: |
-          DLL_PATH=$(find src/WeForgotBingBong/bin/Release -type f -name "WeForgotBingBong.dll" | head -n 1)
-          echo "dll=$DLL_PATH" >> $GITHUB_OUTPUT
-          echo "Found DLL at $DLL_PATH"
+          DLL=$(find src/WeForgotBingBong/bin/Release -type f -name "WeForgotBingBong.dll" | head -n 1)
+          if [ -z "$DLL" ]; then
+            echo "::error ::WeForgotBingBong.dll not found"
+            find src/WeForgotBingBong/bin/Release
+            exit 1
+          fi
+          echo "dll=$DLL" >> $GITHUB_OUTPUT
 
       - name: Prepare BepInEx layout
         run: |
