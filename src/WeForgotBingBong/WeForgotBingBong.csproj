@@ -12,22 +12,34 @@
   </PropertyGroup>
 
   <ItemGroup>
-  <Reference Include="Assembly-CSharp">
-    <HintPath>lib\Assembly-CSharp.dll</HintPath>
-    <Private>False</Private>
-  </Reference>
-  <Reference Include="Zorro.Core.Runtime">
-    <HintPath>lib\Zorro.Core.Runtime.dll</HintPath>
-    <Private>False</Private>
-  </Reference>
-  <Reference Include="PhotonUnityNetworking">
-    <HintPath>lib\PhotonUnityNetworking.dll</HintPath>
-    <Private>False</Private>
-  </Reference>
-  <Reference Include="Sirenix.Serialization">
-    <HintPath>lib\Sirenix.Serialization.dll</HintPath>
-    <Private>False</Private>
-  </Reference>
-</ItemGroup>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>lib\Assembly-CSharp.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Zorro.Core.Runtime">
+      <HintPath>lib\Zorro.Core.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PhotonUnityNetworking">
+      <HintPath>lib\PhotonUnityNetworking.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Sirenix.Serialization">
+      <HintPath>lib\Sirenix.Serialization.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>lib\UnityEngine.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>lib\UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>lib\BepInEx.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
 
 </Project>
