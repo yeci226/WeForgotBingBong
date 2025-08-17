@@ -1,0 +1,58 @@
+name: Build DLL
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            7.0.x
+            6.0.x
+
+      - name: Restore
+        working-directory: src/WeForgotBingBong
+        run: dotnet restore
+
+      - name: Build (Release)
+        working-directory: src/WeForgotBingBong
+        run: dotnet build -c Release --no-restore
+
+      - name: Locate DLL
+        id: finddll
+        run: |
+          DLL_PATH=$(find src/WeForgotBingBong/bin/Release -type f -name "WeForgotBingBong.dll" | head -n 1)
+          echo "dll=$DLL_PATH" >> $GITHUB_OUTPUT
+          echo "Found DLL at $DLL_PATH"
+
+      - name: Prepare BepInEx layout
+        run: |
+          mkdir -p dist/BepInEx/plugins/WeForgotBingBong
+          cp "${{ steps.finddll.outputs.dll }}" dist/BepInEx/plugins/WeForgotBingBong/
+          cp src/WeForgotBingBong/thunderstore.toml dist/ || true
+          cp icon.png dist/ || true
+
+      - name: Pack zip
+        run: |
+          ZIP_NAME="WeForgotBingBong-${GITHUB_SHA::7}.zip"
+          (cd dist && zip -r "../$ZIP_NAME" .)
+          echo "Created zip: $ZIP_NAME"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WeForgotBingBong-build
+          path: |
+            ${{ steps.finddll.outputs.dll }}
+            WeForgotBingBong-*.zip
