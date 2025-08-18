@@ -11,8 +11,8 @@ namespace Gui
         private bool hasValidData = false;
         private string currentCurseType = "None";
         private float curseTimer = 0f;
-        private bool isInBuffer = false;
-        private float remainingBufferTime = 0f;
+        private bool isInvincible = false;
+        private float invincibleTimer = 0f;
 
         void Awake()
         {
@@ -34,16 +34,16 @@ namespace Gui
             hasValidData = true;
         }
 
-        public void SetBufferTimeInfo(bool inBuffer, float remainingTime)
-        {
-            isInBuffer = inBuffer;
-            remainingBufferTime = remainingTime;
-        }
-
         public void SetCurseInfo(string curseType, float timer)
         {
             currentCurseType = curseType;
             curseTimer = timer;
+        }
+
+        public void SetInvincibilityInfo(bool active, float remainingTime)
+        {
+            isInvincible = active;
+            invincibleTimer = remainingTime;
         }
 
         void OnGUI()
@@ -60,32 +60,28 @@ namespace Gui
             Color statusColor;
             if (isHeld)
             {
-                statusText = "✅ BingBong 正在被玩家攜帶";
+                statusText = "BingBong is being carried";  
                 statusColor = Color.green;
             }
             else
             {
-                statusText = "❌ BingBong 未被攜帶";
+                statusText = "BingBong is not being carried";
                 statusColor = Color.red;
             }
 
             GUI.color = statusColor;
             GUI.Label(new Rect(20, 20, 340, 25), statusText);
 
-            GUI.color = Color.white;
-            GUI.Label(new Rect(20, 45, 340, 20), $"詛咒類型: {currentCurseType}");
-
-            // 显示缓冲时间状态
-            if (isInBuffer)
+            if (isInvincible)
             {
                 GUI.color = Color.cyan;
-                GUI.Label(new Rect(20, 65, 340, 20), $"🛡️ 缓冲时间: {remainingBufferTime:F1}s 剩余");
+                GUI.Label(new Rect(20, 50, 340, 20), $"Invincible: {invincibleTimer:F1}s");
             }
             else if (!isHeld)
             {
                 float progress = curseTimer / ConfigClass.curseInterval.Value;
                 GUI.color = Color.yellow;
-                GUI.Label(new Rect(20, 65, 340, 20), $"下次詛咒: {curseTimer:F1}s / {ConfigClass.curseInterval.Value:F1}s");
+                GUI.Label(new Rect(20, 50, 340, 20), $"Next curse: {curseTimer:F1}s / {ConfigClass.curseInterval.Value:F1}s");
 
                 GUI.backgroundColor = new Color(0.8f, 0.2f, 0.2f, 0.8f);
                 GUI.Box(new Rect(20, 85, 340 * progress, 8), "");

@@ -46,7 +46,6 @@ namespace WeForgotBingBong
             if (!alreadyLoaded)
             {
                 alreadyLoaded = true;
-
                 StartCoroutine(InitializeBingBongLogic());
             }
         }
@@ -76,44 +75,26 @@ namespace WeForgotBingBong
                 }
             }
 
-            if (!foundBingBong)
-            {
-                var allItems = UnityEngine.Object.FindObjectsByType<Item>(FindObjectsSortMode.None);
-                foreach (var item in allItems)
-                {
-                    if (item.name.Contains("BingBong"))
-                    {
-                        bingBong = item.gameObject;
-                        bingBongItemID = item.itemID;
-                        foundBingBong = true;
+           if (foundBingBong)
+          {
+              if (ConfigClass.showUI.Value)
+              {
+                  var uiManagerGO = new GameObject("BingBongUIManager");
+                  var uiManager = uiManagerGO.AddComponent<UIManager>();
+              }
 
-                        var curseLogic = bingBong.AddComponent<BingBongCurseLogic>();
-                        curseLogic.Setup(bingBongItemID, ConfigClass.curseInterval.Value, ConfigClass.showUI.Value);
-                        break;
-                    }
-                }
-            }
+              // 通知現有玩家進入緩衝時間
+              var curseLogic = bingBong.GetComponent<BingBongCurseLogic>();
+              if (curseLogic != null)
+              {
+                  var players = UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None);
+              }
 
-            if (foundBingBong)
-            {
-                if (ConfigClass.showUI.Value)
-                {
-                    var uiManagerGO = new GameObject("BingBongUIManager");
-                    var uiManager = uiManagerGO.AddComponent<UIManager>();
-
-                    // Start buffer time for local player immediately when UI is shown
-                    StartCoroutine(StartLocalPlayerBuffer(uiManager));
-                }
-
-                // 立即尝试为本地玩家设置缓冲时间
-                StartCoroutine(SetLocalPlayerBufferImmediately());
-
-                StartCoroutine(MonitorPlayerInventoryChanges());
-
-                StartCoroutine(MonitorItemStateChanges());
-
-                StartCoroutine(MonitorPlayerJoins());
-            }
+              StartCoroutine(StartLocalPlayerSetup());
+              StartCoroutine(MonitorPlayerInventoryChanges());
+              StartCoroutine(MonitorItemStateChanges());
+              StartCoroutine(MonitorPlayerJoins());
+          }
         }
 
         private System.Collections.IEnumerator MonitorItemStateChanges()
@@ -150,7 +131,7 @@ namespace WeForgotBingBong
                 {
                     if (player.photonView.IsMine)
                     {
-                        bool currentlyHolding = CheckIfPlayerHasBingBong(player);
+                        bool currentlyHolding = CheckIfPlayerHasBingBong(player, bingBongItemID);
                         if (currentlyHolding)
                         {
                         }
@@ -177,14 +158,9 @@ namespace WeForgotBingBong
                         // This is a genuinely new player
                         trackedPlayers.Add(player);
                         
-                        var curseLogic = bingBong.GetComponent<BingBongCurseLogic>();
-                        if (curseLogic != null)
+                        if (ConfigClass.debugMode.Value)
                         {
-                            curseLogic.OnPlayerJoined(player);
-                            if (ConfigClass.debugMode.Value)
-                            {
-                                Logger.LogInfo($"New player detected: {player.name}, starting buffer time");
-                            }
+                            Logger.LogInfo($"New player detected: {player.name}");
                         }
                     }
                 }
@@ -192,36 +168,10 @@ namespace WeForgotBingBong
             }
         }
 
-        private System.Collections.IEnumerator SetLocalPlayerBufferImmediately()
+        private System.Collections.IEnumerator StartLocalPlayerSetup()
         {
-            // 立即尝试找到本地玩家并设置缓冲时间
-            var players = UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None);
-            foreach (var player in players)
-            {
-                if (player != null && player.photonView != null && player.photonView.IsMine)
-                {
-                    var curseLogic = bingBong.GetComponent<BingBongCurseLogic>();
-                    if (curseLogic != null)
-                    {
-                        curseLogic.OnPlayerJoined(player);
-                        if (ConfigClass.debugMode.Value)
-                        {
-                            Logger.LogInfo($"Immediately set buffer time for local player: {player.name}");
-                        }
-                    }
-                    break;
-                }
-            }
-
-            yield break;
-        }
-
-        private System.Collections.IEnumerator StartLocalPlayerBuffer(UIManager uiManager)
-        {
-            // Wait a bit for the game to fully load
             yield return new WaitForSeconds(1f);
 
-            // Find local player
             var players = UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None);
             Player? localPlayer = null;
 
@@ -236,70 +186,56 @@ namespace WeForgotBingBong
 
             if (localPlayer != null)
             {
-                // Start buffer time for local player
-                var curseLogic = bingBong.GetComponent<BingBongCurseLogic>();
-                if (curseLogic != null)
+                if (ConfigClass.debugMode.Value)
                 {
-                    curseLogic.OnPlayerJoined(localPlayer);
-
-                    if (ConfigClass.debugMode.Value)
-                    {
-                        Logger.LogInfo($"Started buffer time for local player: {localPlayer.name}");
-                    }
-                }
-            }
-
-            // Wait for local player to be found
-            yield return new WaitForSeconds(2f);
-
-            // Try again if local player wasn't found initially
-            if (localPlayer == null)
-            {
-                players = UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None);
-                foreach (var player in players)
-                {
-                    if (player != null && player.photonView != null && player.photonView.IsMine)
-                    {
-                        localPlayer = player;
-                        var curseLogic = bingBong.GetComponent<BingBongCurseLogic>();
-                        if (curseLogic != null)
-                        {
-                            curseLogic.OnPlayerJoined(localPlayer);
-
-                            if (ConfigClass.debugMode.Value)
-                            {
-                                Logger.LogInfo($"Started buffer time for local player (delayed): {localPlayer.name}");
-                            }
-                        }
-                        break;
-                    }
+                    Logger.LogInfo($"Local player ready: {localPlayer.name}");
                 }
             }
         }
 
-        private bool CheckIfPlayerHasBingBong(Player player)
+        public static bool CheckIfPlayerHasBingBong(Player player, ushort bingBongItemID)
         {
             if (player == null || player.itemSlots == null) return false;
 
+            // 檢查快捷欄
             for (int i = 0; i < player.itemSlots.Length; i++)
             {
                 var slot = player.itemSlots[i];
-                if (!slot.IsEmpty() && slot.prefab != null && slot.prefab.itemID == bingBongItemID)
+                if (!slot.IsEmpty() && slot.prefab != null &&
+                    (slot.prefab.itemID == bingBongItemID || slot.prefab.name.Contains("BingBong")))
                 {
                     return true;
                 }
             }
 
-            if (!player.tempFullSlot.IsEmpty() && player.tempFullSlot.prefab != null &&
-                player.tempFullSlot.prefab.itemID == bingBongItemID)
+            // 檢查臨時槽
+            if (ConfigClass.countTempSlotAsCarrying.Value &&
+                !player.tempFullSlot.IsEmpty() && player.tempFullSlot.prefab != null &&
+                (player.tempFullSlot.prefab.itemID == bingBongItemID || player.tempFullSlot.prefab.name.Contains("BingBong")))
             {
                 return true;
             }
 
-            if (player.backpackSlot.hasBackpack && !player.backpackSlot.IsEmpty() &&
-                player.backpackSlot.prefab != null && player.backpackSlot.prefab.itemID == bingBongItemID)
+
+            if (ConfigClass.countBackpackAsCarrying.Value &&
+                player.backpackSlot.hasBackpack && !player.backpackSlot.IsEmpty())
             {
-                return true;
+                // 取得玩家身上的背包資料
+                BackpackReference backpackRef = BackpackReference.GetFromEquippedBackpack(player.character);
+                BackpackData data = backpackRef.GetData();
+
+                if (data != null)
+                {
+                    foreach (var slot in data.itemSlots)
+                    {
+                        if (!slot.IsEmpty() && slot.prefab != null &&
+                            (slot.prefab.itemID == bingBongItemID || slot.prefab.name.Contains("BingBong")))
+                        {
+                            Plugin.Logger.LogInfo($"[BackpackCheck] Found BingBong inside backpack of {player.name}");
+                            return true;
+                        }
+                    }
+                }
             }
 
             return false;

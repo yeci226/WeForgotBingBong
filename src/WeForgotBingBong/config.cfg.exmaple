@@ -4,10 +4,8 @@
 ## Basic Configuration
 # Interval in seconds between negative effect applications (Min: 0.5, Max: 60.0)
 CurseInterval = 5.0
-# Amount of curse effect applied per application (0.1-5.0)
-CurseIntensity = 1.0
-# Buffer time in seconds after player joins before curses can start (Min: 0, Max: 300)
-PlayerJoinBufferTime = 30.0
+# Duration in seconds for invincibility after curse application (Min: 0.0, Max: 60.0)
+InvincibilityPeriod = 20.0
 
 [UI]
 ## UI Configuration
@@ -35,18 +33,14 @@ EnableHot = true
 ## Carrying Detection Configuration
 # Whether BingBong in backpack counts as carrying (prevents curses)
 CountBackpackAsCarrying = true
-# Whether nearby BingBong counts as carrying (prevents curses)
-CountNearbyAsCarrying = true
-# Nearby detection radius (effective when CountNearbyAsCarrying is true)
-NearbyDetectionRadius = 10.0
 # Whether BingBong in temporary item slot counts as carrying
 CountTempSlotAsCarrying = true
 
 [CurseIntensity]
 ## Final Curse Effect Intensity Configuration
-# Final intensity for each curse effect (0.1-10.0)
+# Final intensity for each curse effect (0.01-10.0)
 PoisonIntensity = 0.1
-InjuryIntensity = 0.05
+InjuryIntensity = 0.1
 HungerIntensity = 0.1
 DrowsyIntensity = 0.1
 CurseStatusIntensity = 0.1
@@ -56,4 +50,4 @@ HotIntensity = 0.1
 [Debug]
 ## Debug Configuration
 # Enable debug mode for detailed logging
-EnableDebugMode = true
+EnableDebugMode = false

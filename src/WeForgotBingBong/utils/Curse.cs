@@ -12,8 +12,6 @@ namespace Curse
         private ushort bingBongItemID;
         private float timer = 0f;
         private readonly Dictionary<Player, float> playerPickupTime = [];
-        private readonly Dictionary<Player, float> playerJoinTime = [];
-        private const float PICKUP_DELAY = 0.5f;
 
         private Player[] cachedPlayers = [];
         private float lastPlayerUpdateTime = 0f;
@@ -25,48 +23,42 @@ namespace Curse
         public void Setup(ushort itemID, float interval, bool displayUI)
         {
             bingBongItemID = itemID;
-            // interval 和 displayUI 參數現在直接從 ConfigClass 讀取，所以不需要存儲
-        }
-
-        void Start()
-        {
-            StartCoroutine(InitializeBufferForExistingPlayers());
-        }
-
-        private System.Collections.IEnumerator InitializeBufferForExistingPlayers()
-        {
-            yield return new WaitForSeconds(0.5f);
-
-            var players = UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None);
-            foreach (var player in players)
-            {
-                if (player == null) continue;
-                playerJoinTime[player] = Time.time;
-                if (ConfigClass.debugMode.Value)
-                {
-                    Plugin.Logger.LogInfo($"[InitBuffer] Player {player.name} buffered at {Time.time:F1}s, duration {ConfigClass.playerJoinBufferTime.Value:F1}s");
-                }
-            }
-
-            // 再次尝试一遍，处理本地玩家延迟出现的情况
-            yield return new WaitForSeconds(1.0f);
-            players = UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None);
-            foreach (var player in players)
-            {
-                if (player == null) continue;
-                if (!playerJoinTime.ContainsKey(player))
-                {
-                    playerJoinTime[player] = Time.time;
-                    if (ConfigClass.debugMode.Value)
-                    {
-                        Plugin.Logger.LogInfo($"[RetryBuffer] Late player {player.name} buffered at {Time.time:F1}s");
-                    }
-                }
-            }
         }
 
         void Update()
         {
+            if (LoadingScreenHandler.loading)
+            {
+                return;
+            }
+
+            if (RunManager.Instance == null || RunManager.Instance.timeSinceRunStarted < ConfigClass.invincibilityPeriod.Value)
+            {
+                float remaining = 0f;
+                if (RunManager.Instance != null)
+                {
+                    remaining = ConfigClass.invincibilityPeriod.Value - RunManager.Instance.timeSinceRunStarted;
+                }
+
+                if (ConfigClass.showUI.Value)
+                {
+                    UIManager.instance?.SetBingBongStatus(false, 0f);
+                    UIManager.instance?.SetInvincibilityInfo(true, remaining);
+                }
+
+                if (ConfigClass.debugMode.Value)
+                {
+                    Plugin.Logger.LogInfo($"[Curse] Run not started or invincibility active ({remaining:F1}s left)");
+                }
+
+                return; 
+            }
+
+            if (ConfigClass.showUI.Value)
+            {
+                UIManager.instance?.SetInvincibilityInfo(false, 0f);
+            }
+
             if (Time.time - lastPlayerUpdateTime >= PLAYER_UPDATE_INTERVAL)
             {
                 cachedPlayers = UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None);
@@ -83,7 +75,7 @@ namespace Curse
             {
                 if (player == null) continue;
 
-                bool isHeld = CheckIfPlayerHasBingBong(player);
+                bool isHeld = Plugin.CheckIfPlayerHasBingBong(player, bingBongItemID);
                 if (isHeld)
                 {
                     isHeldByAny = true;
@@ -99,103 +91,27 @@ namespace Curse
 
             if (ConfigClass.showUI.Value && localPlayer != null)
             {
-                bool localPlayerHolding = CheckIfPlayerHasBingBong(localPlayer);
                 float localPlayerDistance = Vector3.Distance(localPlayer.transform.position, transform.position);
-                UIManager.instance?.SetBingBongStatus(localPlayerHolding, localPlayerDistance);
-
-                string currentCurseType = GetCurrentCurseTypeDisplay();
-                UIManager.instance?.SetCurseInfo(currentCurseType, timer);
-
-                // 更新缓冲时间信息到UI
-                bool isInBuffer = IsPlayerInBufferTime(localPlayer);
-                float remainingBufferTime = GetPlayerRemainingBufferTime(localPlayer);
-                UIManager.instance?.SetBufferTimeInfo(isInBuffer, remainingBufferTime);
-
-                // 调试信息
-                if (ConfigClass.debugMode.Value)
-                {
-                    Plugin.Logger.LogInfo($"[UI Update] Player: {localPlayer.name}, InBuffer: {isInBuffer}, Remaining: {remainingBufferTime:F1}s, Timer: {timer:F1}s");
-                }
+                UIManager.instance?.SetBingBongStatus(isHeldByAny, localPlayerDistance);
             }
 
             if (!isHeldByAny)
             {
-                // Check if any players are still in buffer time
-                bool anyPlayerInBuffer = false;
-                foreach (var player in cachedPlayers)
+                timer += Time.deltaTime;
+
+                if (timer >= ConfigClass.curseInterval.Value)
                 {
-                    if (player != null && !IsPlayerReadyForCurse(player))
-                    {
-                        anyPlayerInBuffer = true;
-                        if (ConfigClass.debugMode.Value)
-                        {
-                            Plugin.Logger.LogInfo($"[BufferCheck] Player {player.name} still in buffer");
-                        }
-                        break;
-                    }
-                }
-
-                if (ConfigClass.debugMode.Value)
-                {
-                    Plugin.Logger.LogInfo($"[BufferCheck] AnyPlayerInBuffer: {anyPlayerInBuffer}, Timer: {timer:F1}s");
-                }
-
-                if (!anyPlayerInBuffer)
-                {
-                    timer += Time.deltaTime;
-                    if (ConfigClass.debugMode.Value)
-                    {
-                        Plugin.Logger.LogInfo($"[Timer] Current timer: {timer:F1}s / {ConfigClass.curseInterval.Value:F1}s");
-                    }
-
-                    if (timer >= ConfigClass.curseInterval.Value)
-                    {
-                        if (ConfigClass.debugMode.Value)
-                        {
-                            Plugin.Logger.LogInfo($"[Curse] Timer reached {ConfigClass.curseInterval.Value}s, applying curses to ready players");
-                        }
-
-                        int cursedPlayerCount = 0;
-                        foreach (var player in cachedPlayers)
-                        {
-                            if (player != null && IsPlayerReadyForCurse(player))
-                            {
-                                if (ConfigClass.debugMode.Value)
-                                {
-                                    Plugin.Logger.LogInfo($"[Curse] Applying curse to player: {player.name}");
-                                }
-                                ApplyCurse(player);
-                                cursedPlayerCount++;
-                            }
-                            else if (player != null)
-                            {
-                                if (ConfigClass.debugMode.Value)
-                                {
-                                    Plugin.Logger.LogInfo($"[Curse] Player {player.name} not ready for curse");
-                                }
-                            }
-                        }
-
-                        if (ConfigClass.debugMode.Value)
-                        {
-                            Plugin.Logger.LogInfo($"[Curse] Applied curses to {cursedPlayerCount} players");
-                        }
-
-                        timer = 0f;
-                    }
-                }
-
-            }
-            else
-            {
-                if (timer > 0)
-                {
-                    timer = 0f;
-
+                    int cursedPlayerCount = 0;
                     foreach (var player in cachedPlayers)
                     {
-                        if (player != null) ClearCurse(player);
+                        if (player != null)
+                        {
+                            ApplyCurse(player);
+                            cursedPlayerCount++;
+                        }
                     }
+
+                    timer = 0f;
                 }
             }
 
@@ -203,172 +119,6 @@ namespace Curse
             {
                 lastCurseState = isHeldByAny;
             }
-        }
-
-        public void OnItemStateChanged(Player player)
-        {
-            if (player != null)
-            {
-                playerPickupTime[player] = Time.time;
-            }
-        }
-
-        public void OnPlayerJoined(Player player)
-        {
-            if (player != null)
-            {
-                playerJoinTime[player] = Time.time;
-                if (ConfigClass.debugMode.Value)
-                {
-                    Plugin.Logger.LogInfo($"Player {player.name} joined, buffer time started at {Time.time:F1}s, buffer duration: {ConfigClass.playerJoinBufferTime.Value:F1}s");
-                }
-            }
-        }
-
-        public float GetPlayerRemainingBufferTime(Player player)
-        {
-            if (player == null || !playerJoinTime.ContainsKey(player)) return 0f;
-
-            float timeSinceJoin = Time.time - playerJoinTime[player];
-            float bufferTime = ConfigClass.playerJoinBufferTime.Value;
-            float remainingTime = bufferTime - timeSinceJoin;
-
-            return Mathf.Max(0f, remainingTime);
-        }
-
-        public bool IsPlayerInBufferTime(Player player)
-        {
-            if (player == null) return false;
-            return playerJoinTime.ContainsKey(player) && GetPlayerRemainingBufferTime(player) > 0f;
-        }
-
-        private bool IsPlayerReadyForCurse(Player player)
-        {
-            if (player == null) return false;
-
-            // Check if player has joined recently and is still in buffer time
-            if (playerJoinTime.ContainsKey(player))
-            {
-                float timeSinceJoin = Time.time - playerJoinTime[player];
-                float bufferTime = ConfigClass.playerJoinBufferTime.Value;
-
-                if (ConfigClass.debugMode.Value)
-                {
-                    Plugin.Logger.LogInfo($"Player {player.name} buffer check: timeSinceJoin={timeSinceJoin:F1}s, bufferTime={bufferTime:F1}s, remaining={bufferTime - timeSinceJoin:F1}s");
-                }
-
-                if (timeSinceJoin < bufferTime)
-                {
-                    return false;
-                }
-                else
-                {
-                    // Remove from join time tracking after buffer expires
-                    playerJoinTime.Remove(player);
-                    if (ConfigClass.debugMode.Value)
-                    {
-                        Plugin.Logger.LogInfo($"Player {player.name} buffer time expired, removed from tracking");
-                    }
-                }
-            }
-
-            return true;
-        }
-
-        private bool CheckIfPlayerHasBingBong(Player player)
-        {
-            if (player == null || player.itemSlots == null) return false;
-
-            if (playerPickupTime.ContainsKey(player))
-            {
-                float timeSincePickup = Time.time - playerPickupTime[player];
-                if (timeSincePickup < PICKUP_DELAY)
-                {
-                    return false;
-                }
-                else
-                {
-                    playerPickupTime.Remove(player);
-                }
-            }
-
-            bool hasInSlot = false;
-            try
-            {
-                hasInSlot = player.HasInAnySlot(bingBongItemID);
-            }
-            catch (System.Exception)
-            {
-            }
-
-            bool hasInAnySlotManual = false;
-            for (int i = 0; i < player.itemSlots.Length; i++)
-            {
-                var slot = player.itemSlots[i];
-                if (!slot.IsEmpty() && slot.prefab != null)
-                {
-                    if (slot.prefab.itemID == bingBongItemID)
-                    {
-                        hasInAnySlotManual = true;
-                        break;
-                    }
-                    else if (slot.prefab.name.Contains("BingBong"))
-                    {
-                        hasInAnySlotManual = true;
-                        break;
-                    }
-                }
-            }
-
-            // Check temporary item slot
-            if (!hasInAnySlotManual && ConfigClass.countTempSlotAsCarrying.Value &&
-                !player.tempFullSlot.IsEmpty() && player.tempFullSlot.prefab != null)
-            {
-                if (player.tempFullSlot.prefab.itemID == bingBongItemID)
-                {
-                    hasInAnySlotManual = true;
-                }
-                else if (player.tempFullSlot.prefab.name.Contains("BingBong"))
-                {
-                    hasInAnySlotManual = true;
-                }
-            }
-
-            // Check backpack
-            if (!hasInAnySlotManual && ConfigClass.countBackpackAsCarrying.Value &&
-                player.backpackSlot.hasBackpack && !player.backpackSlot.IsEmpty() &&
-                player.backpackSlot.prefab != null)
-            {
-                if (player.backpackSlot.prefab.itemID == bingBongItemID)
-                {
-                    hasInAnySlotManual = true;
-                }
-                else if (player.backpackSlot.prefab.name.Contains("BingBong"))
-                {
-                    hasInAnySlotManual = true;
-                }
-            }
-
-            // Check nearby items
-            bool hasNearby = false;
-            if (!hasInSlot && !hasInAnySlotManual && ConfigClass.countNearbyAsCarrying.Value)
-            {
-                float radius = ConfigClass.nearbyDetectionRadius.Value;
-                var nearbyItems = Physics.OverlapSphere(player.transform.position, radius);
-                foreach (var collider in nearbyItems)
-                {
-                    var item = collider.GetComponent<Item>();
-                    if (item != null && (item.itemID == bingBongItemID || item.name.Contains("BingBong")))
-                    {
-                        hasNearby = true;
-                        break;
-                    }
-                }
-            }
-
-            bool finalResult = hasInSlot || hasInAnySlotManual || hasNearby;
-
-            return finalResult;
         }
 
         void ApplyCurse(Player player)
@@ -389,7 +139,6 @@ namespace Curse
             {
                 if (player.character != null && player.character.refs != null && player.character.refs.afflictions != null)
                 {
-                    // Select curse types based on configuration
                     var curseTypes = GetAvailableCurseTypes();
                     if (curseTypes.Count == 0)
                     {
@@ -404,22 +153,6 @@ namespace Curse
                     }
 
                     return;
-                }
-
-                var allComponents = player.GetComponents<Component>();
-                foreach (var comp in allComponents)
-                {
-                    if (comp != null)
-                    {
-                        // 可以在这里添加组件检查逻辑
-                    }
-                }
-                if (player.character != null)
-                {
-                    if (player.character.refs != null)
-                    {
-                        // 可以在这里添加角色引用检查逻辑
-                    }
                 }
             }
             catch (System.Exception)
@@ -578,7 +311,7 @@ namespace Curse
         {
             return curseType switch
             {
-                CharacterAfflictions.STATUSTYPE.Poison => "Poison ",
+                CharacterAfflictions.STATUSTYPE.Poison => "Poison",
                 CharacterAfflictions.STATUSTYPE.Injury => "Injury",
                 CharacterAfflictions.STATUSTYPE.Hunger => "Hunger",
                 CharacterAfflictions.STATUSTYPE.Drowsy => "Drowsy",
@@ -587,25 +320,6 @@ namespace Curse
                 CharacterAfflictions.STATUSTYPE.Hot => "Hot",
                 _ => "Unknown"
             };
-        }
-
-        void ClearCurse(Player player)
-        {
-            if (player == null) return;
-
-            if (!activeCurses.ContainsKey(player))
-            {
-                return;
-            }
-
-            foreach (var curse in activeCurses[player])
-            {
-                if (curse != null)
-                {
-                    curse.enabled = false;
-                }
-            }
-            activeCurses[player].Clear();
         }
     }
 }
