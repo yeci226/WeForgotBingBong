@@ -8,6 +8,7 @@ using Zorro.Core;
 using Gui;
 using Curse;
 using ConfigSpace;
+using System.Linq;
 
 namespace WeForgotBingBong
 {
@@ -49,6 +50,11 @@ namespace WeForgotBingBong
         StartCoroutine(InitializeBingBongLogic());
       }
 
+      ManageUIManager();
+    }
+
+    private void ManageUIManager()
+    {
       if (ConfigClass.showUI.Value)
       {
         if (uiManagerGO == null)
@@ -110,18 +116,10 @@ namespace WeForgotBingBong
         }
 
         StartCoroutine(StartLocalPlayerSetup());
-        StartCoroutine(MonitorPlayerInventoryChanges());
         StartCoroutine(MonitorPlayerJoins());
       }
     }
 
-    private System.Collections.IEnumerator MonitorPlayerInventoryChanges()
-    {
-      while (true)
-      {
-        yield return new WaitForSeconds(2f);
-      }
-    }
 
     private System.Collections.IEnumerator MonitorPlayerJoins()
     {
@@ -178,46 +176,55 @@ namespace WeForgotBingBong
 
     public static bool CheckIfPlayerHasBingBong(Player player, ushort bingBongItemID)
     {
-      if (player == null || player.itemSlots == null) return false;
+      if (player?.itemSlots == null) return false;
 
-      // 檢查快捷欄
-      for (int i = 0; i < player.itemSlots.Length; i++)
-      {
-        var slot = player.itemSlots[i];
-        if (!slot.IsEmpty() && slot.prefab != null &&
-            (slot.prefab.itemID == bingBongItemID || slot.prefab.name.Contains("BingBong")))
-        {
-          return true;
-        }
-      }
+      bool hasInSlots = player.itemSlots.Any(slot =>
+          !slot.IsEmpty() && slot.prefab != null &&
+          (slot.prefab.itemID == bingBongItemID || slot.prefab.name.Contains("BingBong")));
 
-      // 檢查臨時槽
-      if (ConfigClass.countTempSlotAsCarrying.Value &&
-          !player.tempFullSlot.IsEmpty() && player.tempFullSlot.prefab != null &&
-          (player.tempFullSlot.prefab.itemID == bingBongItemID || player.tempFullSlot.prefab.name.Contains("BingBong")))
-      {
+      if (hasInSlots) return true;
+
+      if (ConfigClass.countTempSlotAsCarrying.Value && HasBingBongInSlot(player.tempFullSlot, bingBongItemID))
         return true;
-      }
+      return ConfigClass.countBackpackAsCarrying.Value && HasBingBongInBackPack(player, bingBongItemID);
+    }
 
+    private static bool HasBingBongInSlot(ItemSlot slot, ushort bingBongItemID)
+    {
+      return !slot.IsEmpty() && slot.prefab != null &&
+             (slot.prefab.itemID == bingBongItemID || slot.prefab.name.Contains("BingBong"));
+    }
 
-      if (ConfigClass.countBackpackAsCarrying.Value &&
-          player.backpackSlot.hasBackpack && !player.backpackSlot.IsEmpty())
+    private static bool HasBingBongInBackPack(Player player, ushort bingBongItemID)
+    {
+      if (!player.backpackSlot.hasBackpack || player.backpackSlot.IsEmpty())
+        return false;
+
+      try
       {
-        // 取得玩家身上的背包資料
         BackpackReference backpackRef = BackpackReference.GetFromEquippedBackpack(player.character);
         BackpackData data = backpackRef.GetData();
 
-        if (data != null)
+        if (data?.itemSlots != null)
         {
           foreach (var slot in data.itemSlots)
           {
-            if (!slot.IsEmpty() && slot.prefab != null &&
-                (slot.prefab.itemID == bingBongItemID || slot.prefab.name.Contains("BingBong")))
+            if (HasBingBongInSlot(slot, bingBongItemID))
             {
-              Logger.LogInfo($"[BackpackCheck] Found BingBong inside backpack of {player.name}");
+              if (ConfigClass.debugMode.Value)
+              {
+                Logger.LogInfo($"[BackpackCheck] Found BingBong inside backpack of {player.name}");
+              }
               return true;
             }
           }
+        }
+      }
+      catch (System.Exception ex)
+      {
+        if (ConfigClass.debugMode.Value)
+        {
+          Logger.LogWarning($"[BackpackCheck] Error checking backpack for {player.name}: {ex.Message}");
         }
       }
 
