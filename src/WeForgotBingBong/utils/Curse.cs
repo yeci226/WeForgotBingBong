@@ -17,6 +17,9 @@ namespace Curse
         private float lastPlayerUpdateTime = 0f;
         private const float PLAYER_UPDATE_INTERVAL = 1f;
         private bool lastCurseState = false;
+        private Item[] cachedBingBongs = new Item[0];
+        private float lastBingBongUpdateTime = 0f;
+        private const float BINGBONG_UPDATE_INTERVAL = 2f;
 
         private readonly Dictionary<Player, List<MonoBehaviour>> activeCurses = [];
 
@@ -32,44 +35,32 @@ namespace Curse
                 return;
             }
 
-            if (RunManager.Instance == null || RunManager.Instance.timeSinceRunStarted < ConfigClass.invincibilityPeriod.Value)
-            {
-                float remaining = 0f;
-                if (RunManager.Instance != null)
-                {
-                    remaining = ConfigClass.invincibilityPeriod.Value - RunManager.Instance.timeSinceRunStarted;
-                }
-
-                if (ConfigClass.showUI.Value)
-                {
-                    UIManager.instance?.SetBingBongStatus(false, 0f);
-                    UIManager.instance?.SetInvincibilityInfo(true, remaining);
-                }
-
-                if (ConfigClass.debugMode.Value)
-                {
-                    Plugin.Logger.LogInfo($"[Curse] Run not started or invincibility active ({remaining:F1}s left)");
-                }
-
-                return; 
-            }
-
-            if (ConfigClass.showUI.Value)
-            {
-                UIManager.instance?.SetInvincibilityInfo(false, 0f);
-            }
-
             if (Time.time - lastPlayerUpdateTime >= PLAYER_UPDATE_INTERVAL)
             {
                 cachedPlayers = UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None);
                 lastPlayerUpdateTime = Time.time;
             }
-
             if (cachedPlayers.Length == 0) return;
+            if (Time.time - lastBingBongUpdateTime >= BINGBONG_UPDATE_INTERVAL)
+            {
+                List<Item> found = new List<Item>();
+                foreach (var item in UnityEngine.Object.FindObjectsByType<Item>(FindObjectsSortMode.None))
+                {
+                    if (item != null && (item.itemID == bingBongItemID || item.name.Contains("BingBong")))
+                    {
+                        if (item.transform.root == item.transform)
+                        {
+                            found.Add(item);
+                        }
+                    }
+                }
+                cachedBingBongs = found.ToArray();
+                lastBingBongUpdateTime = Time.time;
+            }
 
             bool isHeldByAny = false;
             Player? localPlayer = null;
-            List<string> carryingPlayers = [];
+            List<string> carryingPlayers = new List<string>();
 
             foreach (var player in cachedPlayers)
             {
@@ -89,13 +80,69 @@ namespace Curse
                 }
             }
 
-            if (ConfigClass.showUI.Value && localPlayer != null)
+            bool inInvincibility = RunManager.Instance != null &&
+                                  RunManager.Instance.timeSinceRunStarted < ConfigClass.invincibilityPeriod.Value;
+            float invRemaining = 0f;
+            if (inInvincibility && RunManager.Instance != null)
             {
-                float localPlayerDistance = Vector3.Distance(localPlayer.transform.position, transform.position);
-                UIManager.instance?.SetBingBongStatus(isHeldByAny, localPlayerDistance);
+                invRemaining = ConfigClass.invincibilityPeriod.Value - RunManager.Instance.timeSinceRunStarted;
             }
 
-            if (!isHeldByAny)
+            if (ConfigClass.showUI.Value && localPlayer != null)
+            {
+                Vector3 playerPos;
+                if (localPlayer.character != null && localPlayer.character.refs.head != null)
+                {
+                    playerPos = localPlayer.character.refs.head.transform.position;
+                }
+                else
+                {
+                    playerPos = localPlayer.character?.refs?.head?.transform?.position 
+                    ?? localPlayer.character?.transform?.position 
+                    ?? localPlayer.transform.position;
+                }
+
+                float localPlayerDistance = float.MaxValue;
+                foreach (var item in cachedBingBongs)
+                {
+                    if (item == null || item.itemState == ItemState.Held || item.itemState == ItemState.InBackpack) continue;
+
+                    // 只計算地上 BingBong 的距離
+                    float dist = Vector3.Distance(playerPos, item.transform.position);
+                    if (dist < localPlayerDistance)
+                    {
+                        localPlayerDistance = dist;
+                    }
+                }
+
+                if (localPlayerDistance == float.MaxValue)
+                    localPlayerDistance = -1f;
+
+                UIManager.instance?.SetBingBongStatus(isHeldByAny, localPlayerDistance);
+
+                if (inInvincibility)
+                {
+                    UIManager.instance?.SetInvincibilityInfo(true, invRemaining);
+                    UIManager.instance?.SetCurseInfo("", 0f);
+                }
+                else
+                {
+                    UIManager.instance?.SetInvincibilityInfo(false, 0f);
+
+                    if (!isHeldByAny)
+                    {
+                        float remaining = Mathf.Max(0f, ConfigClass.curseInterval.Value - timer);
+                        UIManager.instance?.SetCurseInfo(GetCurrentCurseTypeDisplay(), remaining);
+                    }
+                    else
+                    {
+                        UIManager.instance?.SetCurseInfo("", 0f);
+                    }
+                }
+            }
+
+
+            if (!inInvincibility && !isHeldByAny)
             {
                 timer += Time.deltaTime;
 

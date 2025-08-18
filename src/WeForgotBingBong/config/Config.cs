@@ -39,7 +39,7 @@ namespace ConfigSpace
         public static void InitConfig(ConfigFile config)
         {
             // Basic Configuration
-            curseInterval = config.Bind("General", "CurseInterval", 5.0f, "Interval in seconds between curse applications (Min: 0.5, Max: 60.0)");
+            curseInterval = config.Bind("General", "CurseInterval", 5.0f, "Interval in seconds between curse applications (Min: 0.01, Max: 60.0)");
             invincibilityPeriod = config.Bind("General", "InvincibilityPeriod", 20.0f, "Duration in seconds for invincibility after curse application (Min: 0.0, Max: 60.0)");
             showUI = config.Bind("UI", "ShowBingBongUI", true, "Whether to display BingBong status on screen");
             debugMode = config.Bind("Debug", "EnableDebugMode", false, "Enable debug mode for detailed logging");
@@ -83,7 +83,7 @@ namespace ConfigSpace
             // Curse interval constraints
             curseInterval.SettingChanged += (sender, e) =>
             {
-                if (curseInterval.Value < 0.5f) curseInterval.Value = 0.5f;
+                if (curseInterval.Value < 0.01f) curseInterval.Value = 0.01f;
                 if (curseInterval.Value > 60.0f) curseInterval.Value = 60.0f;
             };
 

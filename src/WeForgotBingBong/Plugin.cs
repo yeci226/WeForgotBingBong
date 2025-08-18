@@ -35,11 +35,12 @@ namespace WeForgotBingBong
         {
             Instance = this;
             Logger = base.Logger;
-            Object.DontDestroyOnLoad(base.gameObject);
             SceneManager.sceneLoaded += OnSceneLoaded;
 
             ConfigClass.InitConfig(Config);
         }
+
+        private static GameObject? uiManagerGO;
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode _)
         {
@@ -48,7 +49,34 @@ namespace WeForgotBingBong
                 alreadyLoaded = true;
                 StartCoroutine(InitializeBingBongLogic());
             }
+
+            if (ConfigClass.showUI.Value)
+            {
+                if (uiManagerGO == null)
+                {
+                    uiManagerGO = new GameObject("BingBongUIManager");
+                    uiManagerGO.AddComponent<UIManager>();
+                }
+            }
+            else
+            {
+                if (uiManagerGO != null)
+                {
+                    Destroy(uiManagerGO);
+                    uiManagerGO = null;
+                }
+            }
         }
+
+        private void OnDestroy()
+        {
+            if (uiManagerGO != null)
+            {
+                Destroy(uiManagerGO);
+                uiManagerGO = null;
+            }
+        }
+
 
         private System.Collections.IEnumerator InitializeBingBongLogic()
         {
