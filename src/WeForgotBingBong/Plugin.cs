@@ -75,6 +75,7 @@ namespace WeForgotBingBong
 
     private void OnDestroy()
     {
+      SceneManager.sceneLoaded -= OnSceneLoaded;
       if (uiManagerGO != null)
       {
         Destroy(uiManagerGO);
@@ -92,28 +93,15 @@ namespace WeForgotBingBong
         yield break;
       }
 
-      bool foundBingBong = false;
-      foreach (KeyValuePair<ushort, Item> kv in db.itemLookup)
-      {
-        if (kv.Value.name == "BingBong")
-        {
-          bingBong = kv.Value.gameObject;
-          bingBongItemID = kv.Value.itemID;
-          foundBingBong = true;
+      var bingBongItem = db.itemLookup.Values.FirstOrDefault(item => item.name == "BingBong");
 
-          var curseLogic = bingBong.AddComponent<BingBongCurseLogic>();
-          curseLogic.Setup(bingBongItemID);
-          break;
-        }
-      }
-
-      if (foundBingBong)
+      if (bingBongItem != null)
       {
-        if (ConfigClass.showUI.Value)
-        {
-          var uiManagerGO = new GameObject("BingBongUIManager");
-          uiManagerGO.AddComponent<UIManager>();
-        }
+        bingBong = bingBongItem.gameObject;
+        bingBongItemID = bingBongItem.itemID;
+
+        var curseLogic = bingBong.AddComponent<BingBongCurseLogic>();
+        curseLogic.Setup(bingBongItemID);
 
         StartCoroutine(StartLocalPlayerSetup());
         StartCoroutine(MonitorPlayerJoins());
@@ -129,22 +117,20 @@ namespace WeForgotBingBong
       {
         yield return new WaitForSeconds(1f);
 
-        var players = FindObjectsByType<Player>(FindObjectsSortMode.None);
-
-        // Check for genuinely new players only
-        foreach (var player in players)
+        var players = FindObjectsByType<Player>(FindObjectsSortMode.None)
+            .Where(p => p?.photonView != null)
+            .ToArray();
+        var newPlayers = players.Where(p => !trackedPlayers.Contains(p)).ToList();
+        foreach (var player in newPlayers)
         {
-          if (player != null && player.photonView != null && !trackedPlayers.Contains(player))
-          {
-            // This is a genuinely new player
-            trackedPlayers.Add(player);
+          trackedPlayers.Add(player);
 
-            if (ConfigClass.debugMode.Value)
-            {
-              Logger.LogInfo($"New player detected: {player.name}");
-            }
+          if (ConfigClass.debugMode.Value)
+          {
+            Logger.LogInfo($"New player detected: {player.name}");
           }
         }
+
         trackedPlayers.RemoveWhere(p => p == null);
       }
     }
@@ -153,24 +139,12 @@ namespace WeForgotBingBong
     {
       yield return new WaitForSeconds(1f);
 
-      var players = FindObjectsByType<Player>(FindObjectsSortMode.None);
-      Player? localPlayer = null;
+      var localPlayer = FindObjectsByType<Player>(FindObjectsSortMode.None)
+          .FirstOrDefault(player => player?.photonView?.IsMine == true);
 
-      foreach (var player in players)
+      if (localPlayer != null && ConfigClass.debugMode.Value)
       {
-        if (player != null && player.photonView != null && player.photonView.IsMine)
-        {
-          localPlayer = player;
-          break;
-        }
-      }
-
-      if (localPlayer != null)
-      {
-        if (ConfigClass.debugMode.Value)
-        {
-          Logger.LogInfo($"Local player ready: {localPlayer.name}");
-        }
+        Logger.LogInfo($"Local player ready: {localPlayer.name}");
       }
     }
 
@@ -232,4 +206,3 @@ namespace WeForgotBingBong
     }
   }
 }
-
