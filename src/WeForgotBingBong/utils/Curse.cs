@@ -10,38 +10,31 @@ namespace Curse
     public class BingBongCurseLogic : MonoBehaviour
     {
         private ushort bingBongItemID;
-        private float curseInterval = 2f;
-        private bool showUI = true;
-        private float curseIntensity = 1.0f;
         private float timer = 0f;
         private readonly Dictionary<Player, float> playerPickupTime = [];
         private readonly Dictionary<Player, float> playerJoinTime = [];
         private const float PICKUP_DELAY = 0.5f;
+
+        private Player[] cachedPlayers = [];
+        private float lastPlayerUpdateTime = 0f;
+        private const float PLAYER_UPDATE_INTERVAL = 1f;
+        private bool lastCurseState = false;
 
         private readonly Dictionary<Player, List<MonoBehaviour>> activeCurses = [];
 
         public void Setup(ushort itemID, float interval, bool displayUI)
         {
             bingBongItemID = itemID;
-            curseInterval = interval;
-            showUI = displayUI;
-            curseIntensity = ConfigClass.curseIntensity.Value;
-        }
-
-        public void UpdateCurseIntensity()
-        {
-            curseIntensity = ConfigClass.curseIntensity.Value;
+            // interval 和 displayUI 參數現在直接從 ConfigClass 讀取，所以不需要存儲
         }
 
         void Start()
         {
-            // 确保在组件启动时为当前已存在的玩家设置加入缓冲
             StartCoroutine(InitializeBufferForExistingPlayers());
         }
 
         private System.Collections.IEnumerator InitializeBufferForExistingPlayers()
         {
-            // 稍作等待，避免玩家对象尚未生成
             yield return new WaitForSeconds(0.5f);
 
             var players = UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None);
@@ -72,15 +65,8 @@ namespace Curse
             }
         }
 
-        private Player[] cachedPlayers = [];
-        private float lastPlayerUpdateTime = 0f;
-        private const float PLAYER_UPDATE_INTERVAL = 1f;
-        private bool lastCurseState = false;
-
         void Update()
         {
-            UpdateCurseIntensity();
-
             if (Time.time - lastPlayerUpdateTime >= PLAYER_UPDATE_INTERVAL)
             {
                 cachedPlayers = UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None);
@@ -111,14 +97,14 @@ namespace Curse
                 }
             }
 
-            if (showUI && localPlayer != null)
+            if (ConfigClass.showUI.Value && localPlayer != null)
             {
                 bool localPlayerHolding = CheckIfPlayerHasBingBong(localPlayer);
                 float localPlayerDistance = Vector3.Distance(localPlayer.transform.position, transform.position);
                 UIManager.instance?.SetBingBongStatus(localPlayerHolding, localPlayerDistance);
 
                 string currentCurseType = GetCurrentCurseTypeDisplay();
-                UIManager.instance?.SetCurseInfo(currentCurseType, timer, curseInterval);
+                UIManager.instance?.SetCurseInfo(currentCurseType, timer);
 
                 // 更新缓冲时间信息到UI
                 bool isInBuffer = IsPlayerInBufferTime(localPlayer);
@@ -156,40 +142,43 @@ namespace Curse
 
                 if (!anyPlayerInBuffer)
                 {
-                    // 如果所有玩家都不在缓冲时间，但诅咒计时器为0，给所有玩家重新设置缓冲时间
-                    if (timer == 0f)
+                    timer += Time.deltaTime;
+                    if (ConfigClass.debugMode.Value)
                     {
-                        foreach (var player in cachedPlayers)
-                        {
-                            if (player != null)
-                            {
-                                playerJoinTime[player] = Time.time;
-                                if (ConfigClass.debugMode.Value)
-                                {
-                                    Plugin.Logger.LogInfo($"[RestartBuffer] Player {player.name} restarted buffer at {Time.time:F1}s");
-                                }
-                            }
-                        }
-                        if (ConfigClass.debugMode.Value)
-                        {
-                            Plugin.Logger.LogInfo("[RestartBuffer] All players buffered, waiting...");
-                        }
-                        return; // 等待缓冲时间
+                        Plugin.Logger.LogInfo($"[Timer] Current timer: {timer:F1}s / {ConfigClass.curseInterval.Value:F1}s");
                     }
 
-                    timer += Time.deltaTime;
-                    if (timer >= curseInterval)
+                    if (timer >= ConfigClass.curseInterval.Value)
                     {
                         if (ConfigClass.debugMode.Value)
                         {
-                            Plugin.Logger.LogInfo($"[Curse] Timer reached {curseInterval}s, applying curses");
+                            Plugin.Logger.LogInfo($"[Curse] Timer reached {ConfigClass.curseInterval.Value}s, applying curses to ready players");
                         }
+
+                        int cursedPlayerCount = 0;
                         foreach (var player in cachedPlayers)
                         {
                             if (player != null && IsPlayerReadyForCurse(player))
                             {
+                                if (ConfigClass.debugMode.Value)
+                                {
+                                    Plugin.Logger.LogInfo($"[Curse] Applying curse to player: {player.name}");
+                                }
                                 ApplyCurse(player);
+                                cursedPlayerCount++;
                             }
+                            else if (player != null)
+                            {
+                                if (ConfigClass.debugMode.Value)
+                                {
+                                    Plugin.Logger.LogInfo($"[Curse] Player {player.name} not ready for curse");
+                                }
+                            }
+                        }
+
+                        if (ConfigClass.debugMode.Value)
+                        {
+                            Plugin.Logger.LogInfo($"[Curse] Applied curses to {cursedPlayerCount} players");
                         }
 
                         timer = 0f;
@@ -433,7 +422,7 @@ namespace Curse
                     }
                 }
             }
-            catch (System.Exception ex)
+            catch (System.Exception)
             {
             }
         }
@@ -464,6 +453,13 @@ namespace Curse
         {
             var selectedCurses = new List<CharacterAfflictions.STATUSTYPE>();
 
+            if (ConfigClass.debugMode.Value)
+            {
+                Plugin.Logger.LogInfo($"[SelectCurses] Available curses: {string.Join(", ", availableCurses)}");
+                Plugin.Logger.LogInfo($"[SelectCurses] Selection mode: {ConfigClass.curseSelectionMode.Value}");
+                Plugin.Logger.LogInfo($"[SelectCurses] Single curse type setting: {ConfigClass.singleCurseType.Value}");
+            }
+
             switch (ConfigClass.curseSelectionMode.Value)
             {
                 case Plugin.CurseSelectionMode.Single:
@@ -472,10 +468,18 @@ namespace Curse
                     if (availableCurses.Contains(singleType))
                     {
                         selectedCurses.Add(singleType);
+                        if (ConfigClass.debugMode.Value)
+                        {
+                            Plugin.Logger.LogInfo($"[SelectCurses] Selected single curse: {singleType}");
+                        }
                     }
                     else if (availableCurses.Count > 0)
                     {
                         selectedCurses.Add(availableCurses[0]); // Fallback to first available type
+                        if (ConfigClass.debugMode.Value)
+                        {
+                            Plugin.Logger.LogInfo($"[SelectCurses] Single curse not available, fallback to: {availableCurses[0]}");
+                        }
                     }
                     break;
 
@@ -485,13 +489,26 @@ namespace Curse
                     {
                         int randomIndex = UnityEngine.Random.Range(0, availableCurses.Count);
                         selectedCurses.Add(availableCurses[randomIndex]);
+                        if (ConfigClass.debugMode.Value)
+                        {
+                            Plugin.Logger.LogInfo($"[SelectCurses] Random selection: {availableCurses[randomIndex]} (index {randomIndex} of {availableCurses.Count})");
+                        }
                     }
                     break;
 
                 case Plugin.CurseSelectionMode.Multiple:
                     // Multiple curses
                     selectedCurses.AddRange(availableCurses);
+                    if (ConfigClass.debugMode.Value)
+                    {
+                        Plugin.Logger.LogInfo($"[SelectCurses] Multiple curses selected: {string.Join(", ", selectedCurses)}");
+                    }
                     break;
+            }
+
+            if (ConfigClass.debugMode.Value)
+            {
+                Plugin.Logger.LogInfo($"[SelectCurses] Final selected curses: {string.Join(", ", selectedCurses)}");
             }
 
             return selectedCurses;
@@ -515,9 +532,13 @@ namespace Curse
         private void ApplySpecificCurse(Player player, string playerName, CharacterAfflictions.STATUSTYPE curseType)
         {
             float finalIntensity = GetFinalIntensityForCurseType(curseType);
+            
+            if (ConfigClass.debugMode.Value)
+            {
+                Plugin.Logger.LogInfo($"[ApplySpecificCurse] Applying {curseType} to {playerName} with intensity {finalIntensity}");
+            }
 
             player.character.refs.afflictions.AddStatus(curseType, finalIntensity, false);
-
         }
 
         private float GetFinalIntensityForCurseType(CharacterAfflictions.STATUSTYPE curseType)

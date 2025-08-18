@@ -1,3 +1,4 @@
+using ConfigSpace;
 using UnityEngine;
 
 namespace Gui
@@ -10,7 +11,6 @@ namespace Gui
         private bool hasValidData = false;
         private string currentCurseType = "None";
         private float curseTimer = 0f;
-        private float curseInterval = 2f;
         private bool isInBuffer = false;
         private float remainingBufferTime = 0f;
 
@@ -40,11 +40,10 @@ namespace Gui
             remainingBufferTime = remainingTime;
         }
 
-        public void SetCurseInfo(string curseType, float timer, float interval)
+        public void SetCurseInfo(string curseType, float timer)
         {
             currentCurseType = curseType;
             curseTimer = timer;
-            curseInterval = interval;
         }
 
         void OnGUI()
@@ -84,9 +83,9 @@ namespace Gui
             }
             else if (!isHeld)
             {
-                float progress = curseTimer / curseInterval;
+                float progress = curseTimer / ConfigClass.curseInterval.Value;
                 GUI.color = Color.yellow;
-                GUI.Label(new Rect(20, 65, 340, 20), $"下次詛咒: {curseTimer:F1}s / {curseInterval:F1}s");
+                GUI.Label(new Rect(20, 65, 340, 20), $"下次詛咒: {curseTimer:F1}s / {ConfigClass.curseInterval.Value:F1}s");
 
                 GUI.backgroundColor = new Color(0.8f, 0.2f, 0.2f, 0.8f);
                 GUI.Box(new Rect(20, 85, 340 * progress, 8), "");

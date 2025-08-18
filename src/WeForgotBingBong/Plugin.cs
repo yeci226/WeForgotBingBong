@@ -161,33 +161,34 @@ namespace WeForgotBingBong
 
         private System.Collections.IEnumerator MonitorPlayerJoins()
         {
-            var lastPlayerCount = 0;
+            var trackedPlayers = new HashSet<Player>();
 
             while (true)
             {
                 yield return new WaitForSeconds(1f);
 
                 var players = UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None);
-                int currentPlayerCount = players.Length;
-
-                // Check for new players
-                if (currentPlayerCount > lastPlayerCount)
+                
+                // Check for genuinely new players only
+                foreach (var player in players)
                 {
-                    foreach (var player in players)
+                    if (player != null && player.photonView != null && !trackedPlayers.Contains(player))
                     {
-                        if (player != null && player.photonView != null)
+                        // This is a genuinely new player
+                        trackedPlayers.Add(player);
+                        
+                        var curseLogic = bingBong.GetComponent<BingBongCurseLogic>();
+                        if (curseLogic != null)
                         {
-                            // Find the curse logic component and notify about new player
-                            var curseLogic = bingBong.GetComponent<BingBongCurseLogic>();
-                            if (curseLogic != null)
+                            curseLogic.OnPlayerJoined(player);
+                            if (ConfigClass.debugMode.Value)
                             {
-                                curseLogic.OnPlayerJoined(player);
+                                Logger.LogInfo($"New player detected: {player.name}, starting buffer time");
                             }
                         }
                     }
                 }
-
-                lastPlayerCount = currentPlayerCount;
+                trackedPlayers.RemoveWhere(p => p == null);
             }
         }
 
@@ -222,7 +223,7 @@ namespace WeForgotBingBong
 
             // Find local player
             var players = UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None);
-            Player localPlayer = null;
+            Player? localPlayer = null;
 
             foreach (var player in players)
             {
