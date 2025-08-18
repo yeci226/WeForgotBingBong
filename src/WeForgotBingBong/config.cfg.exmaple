@@ -1,0 +1,59 @@
+# WeForgotBingBong Configuration File (Example)
+
+[General]
+## Basic Configuration
+# Interval in seconds between negative effect applications (Min: 0.5, Max: 60.0)
+CurseInterval = 5.0
+# Amount of curse effect applied per application (0.1-5.0)
+CurseIntensity = 1.0
+# Buffer time in seconds after player joins before curses can start (Min: 0, Max: 300)
+PlayerJoinBufferTime = 30.0
+
+[UI]
+## UI Configuration
+# Whether to display BingBong status on screen
+ShowBingBongUI = true
+
+[CurseType]
+## Curse Type Configuration
+# Curse selection mode: Single(one type), Random(random selection), Multiple(multiple curses)
+SelectionMode = Single
+# Single curse type (effective when SelectionMode is set to Single)
+# Available options: Poison, Injury, Hunger, Drowsy, Curse, Cold, Hot
+SingleCurseType = Poison
+
+# Individual curse type switches
+EnablePoison = true
+EnableInjury = true
+EnableHunger = true
+EnableDrowsy = true
+EnableCurse = false
+EnableCold = true
+EnableHot = true
+
+[CarryingDetection]
+## Carrying Detection Configuration
+# Whether BingBong in backpack counts as carrying (prevents curses)
+CountBackpackAsCarrying = true
+# Whether nearby BingBong counts as carrying (prevents curses)
+CountNearbyAsCarrying = true
+# Nearby detection radius (effective when CountNearbyAsCarrying is true)
+NearbyDetectionRadius = 10.0
+# Whether BingBong in temporary item slot counts as carrying
+CountTempSlotAsCarrying = true
+
+[CurseIntensity]
+## Final Curse Effect Intensity Configuration
+# Final intensity for each curse effect (0.1-10.0)
+PoisonIntensity = 0.1
+InjuryIntensity = 0.05
+HungerIntensity = 0.1
+DrowsyIntensity = 0.1
+CurseStatusIntensity = 0.1
+ColdIntensity = 0.1
+HotIntensity = 0.1
+
+[Debug]
+## Debug Configuration
+# Enable debug mode for detailed logging
+EnableDebugMode = true

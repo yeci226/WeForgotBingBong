@@ -1,102 +1,180 @@
-# WeForgotBingBong - 诅咒系统
+# WeForgotBingBong - Curse System
 
-这是一个为游戏添加诅咒效果的模组，当玩家没有携带BingBong物品时，会定期对玩家施加负面效果。
+This is a mod that adds curse effects to the game. When players are not carrying the BingBong item, negative effects will be periodically applied to them.
 
-## 功能特性
+## Features
 
-### 🎯 诅咒类型
-- **Poison (中毒)**: 持续造成伤害
-- **Injury (受伤)**: 增加受伤状态
-- **Exhaustion (疲惫)**: 使用饥饿状态模拟疲惫效果
-- **Paranoia (偏执)**: 使用恐惧状态模拟偏执效果
-- **Random (随机)**: 随机选择一种诅咒效果
+### 🎯 Curse Types
+- **Poison**: Continuous damage over time
+- **Injury**: Increases injury status
+- **Hunger**: Increases hunger status
+- **Drowsy**: Increases drowsy status
+- **Curse**: Curse status effect
+- **Cold**: Cold status effect
+- **Hot**: Hot status effect
 
-### ⚙️ 配置选项
-- `CurseInterval`: 施加诅咒的间隔时间（秒）
-- `CurseType`: 诅咒效果类型
-- `CurseIntensity`: 诅咒效果强度倍数 (0.5-2.0)
-- `ShowBingBongUI`: 是否显示状态UI
+### ⚙️ Configuration Options
 
-### 🖥️ UI界面
-- 实时显示BingBong携带状态
-- 显示当前诅咒类型
-- 诅咒倒计时进度条
-- 彩色状态指示器
+#### Basic Configuration
+- `CurseInterval`: Interval in seconds between curse applications (0.5-60.0)
+- `CurseIntensity`: Amount of curse effect applied per application (0.1-5.0)
+- `PlayerJoinBufferTime`: Buffer time in seconds after player joins before curses can start (0-300)
+- `ShowBingBongUI`: Whether to display status UI
 
-## 技术实现
+#### Curse Type Configuration
+- `SelectionMode`: Curse selection mode
+  - `Single`: Single curse type
+  - `Random`: Random selection
+  - `Multiple`: Multiple curses
+- `SingleCurseType`: Single curse type selection
+- Individual curse type switches
 
-### 不使用HarmonyLib的方法
-本模组通过以下方式实现诅咒效果，无需使用HarmonyLib：
+#### Carrying Detection Configuration
+- `CountBackpackAsCarrying`: Whether BingBong in backpack counts as carrying
+- `CountNearbyAsCarrying`: Whether nearby BingBong counts as carrying
+- `NearbyDetectionRadius`: Nearby detection radius
+- `CountTempSlotAsCarrying`: Whether BingBong in temporary item slot counts as carrying
 
-1. **直接添加游戏内置组件**:
+#### Final Curse Intensity Configuration
+- Direct final intensity control for each curse type
+- Range: 0.1-10.0
+
+### 🖥️ UI Interface
+- Real-time BingBong carrying status display
+- Current curse type display
+- Curse countdown progress bar
+- Color-coded status indicators
+
+## Technical Implementation
+
+### Method Without Using HarmonyLib
+This mod implements curse effects through the following methods without requiring HarmonyLib:
+
+1. **Direct Addition of Built-in Game Components**:
    ```csharp
-   // 中毒效果
-   var poison = player.gameObject.AddComponent<Action_InflictPoison>();
-   poison.inflictionTime = 5f * curseIntensity;
-   poison.poisonPerSecond = 0.05f * curseIntensity;
-   
-   // 受伤效果
-   var injury = player.gameObject.AddComponent<Action_ModifyStatus>();
-   injury.statusType = CharacterAfflictions.STATUSTYPE.Injury;
-   injury.changeAmount = 0.2f * curseIntensity;
+   // Using built-in status system
+   player.character.refs.afflictions.AddStatus(
+       CharacterAfflictions.STATUSTYPE.Poison, 
+       0.1f * curseIntensity, 
+       false
+   );
    ```
 
-2. **使用游戏内置的状态系统**:
-   - `CharacterAfflictions.STATUSTYPE.Injury` - 受伤状态
-   - `CharacterAfflictions.STATUSTYPE.Hunger` - 饥饿状态（模拟疲惫）
-   - `CharacterAfflictions.STATUSTYPE.Fear` - 恐惧状态（模拟偏执）
+2. **Using Built-in Status System**:
+   - `CharacterAfflictions.STATUSTYPE.Poison` - Poison status
+   - `CharacterAfflictions.STATUSTYPE.Injury` - Injury status
+   - `CharacterAfflictions.STATUSTYPE.Hunger` - Hunger status
+   - `CharacterAfflictions.STATUSTYPE.Drowsy` - Drowsy status
+   - `CharacterAfflictions.STATUSTYPE.Curse` - Curse status
+   - `CharacterAfflictions.STATUSTYPE.Cold` - Cold status
+   - `CharacterAfflictions.STATUSTYPE.Hot` - Hot status
 
-3. **组件生命周期管理**:
-   - 自动清理已销毁的玩家
-   - 诅咒效果组件缓存
-   - 状态变化监听
+3. **Component Lifecycle Management**:
+   - Automatic cleanup of destroyed players
+   - Curse effect component caching
+   - Status change monitoring
 
-### 核心类说明
+### Core Classes
 
-- **Plugin**: 主插件类，负责初始化和配置
-- **BingBongCurseLogic**: 诅咒逻辑核心，管理效果施加和清除
-- **UIManager**: UI管理器，显示状态信息和进度条
+- **Plugin**: Main plugin class, responsible for initialization and configuration management
+- **BingBongCurseLogic**: Core curse logic, manages effect application and removal
+- **UIManager**: UI manager, displays status information and progress bars
 
-## 安装说明
+## Installation
 
-1. 确保已安装BepInEx
-2. 将模组文件放入`BepInEx/plugins`文件夹
-3. 启动游戏，模组会自动加载
+1. Ensure BepInEx is installed
+2. Place mod files in the `BepInEx/plugins` folder
+3. Start the game, the mod will load automatically
 
-## 配置说明
+## Configuration
 
-在`BepInEx/config`文件夹中会生成配置文件，可以调整以下参数：
+A configuration file `config.cfg` will be generated in the `BepInEx/config` folder where you can adjust the following parameters:
 
-```toml
+### Fast Curse Mode
+```ini
 [General]
-CurseInterval = 2.0
-CurseType = Poison
-CurseIntensity = 1.0
+CurseInterval = 1.0
+CurseIntensity = 2.0
 
-[UI]
-ShowBingBongUI = true
+[CurseType]
+SelectionMode = Multiple
+EnablePoison = true
+EnableInjury = true
+EnableHunger = false
+EnableDrowsy = false
+EnableCurse = true
+EnableCold = false
+EnableHot = false
 ```
 
-## 兼容性
+### Gentle Curse Mode
+```ini
+[General]
+CurseInterval = 5.0
+CurseIntensity = 0.5
 
-- 基于游戏内置的状态系统，无需额外依赖
-- 支持多人游戏
-- 自动处理玩家加入/离开
-- 场景切换时保持状态
+[CurseType]
+SelectionMode = Random
+EnablePoison = true
+EnableHunger = true
+EnableDrowsy = true
+EnableInjury = false
+EnableCurse = false
+EnableCold = false
+EnableHot = false
+```
 
-## 故障排除
+### Single Curse Mode
+```ini
+[General]
+CurseInterval = 3.0
+CurseIntensity = 1.5
 
-如果遇到问题，请检查：
-1. BepInEx是否正确安装
-2. 游戏日志中是否有错误信息
-3. 配置文件是否正确设置
+[CurseType]
+SelectionMode = Single
+SingleCurseType = Poison
+EnablePoison = true
+EnableInjury = false
+EnableHunger = false
+EnableDrowsy = false
+EnableCurse = false
+EnableCold = false
+EnableHot = false
+```
 
-## 开发说明
+For detailed configuration instructions, please refer to the `config_template.md` file.
 
-本模组展示了如何在不使用HarmonyLib的情况下：
-- 添加游戏内置效果组件
-- 管理玩家状态
-- 实现实时UI更新
-- 处理多人游戏同步
+## Compatibility
 
-通过直接使用游戏提供的API和组件，可以避免HarmonyLib的复杂性，同时实现相同的功能效果。
+- Based on built-in game status system, no additional dependencies required
+- Supports multiplayer games
+- Automatically handles player join/leave
+- Maintains state during scene transitions
+
+## Troubleshooting
+
+If you encounter issues, please check:
+1. Whether BepInEx is properly installed
+2. Whether there are error messages in the game logs
+3. Whether the configuration file is correctly set
+4. Whether debug mode is enabled for detailed logging
+
+## Development Notes
+
+This mod demonstrates how to implement the following without using HarmonyLib:
+- Add built-in game effect components
+- Manage player status
+- Implement real-time UI updates
+- Handle multiplayer game synchronization
+- Implement flexible configuration system
+
+By directly using the APIs and components provided by the game, we can avoid the complexity of HarmonyLib while achieving the same functional effects.
+
+## Changelog
+
+### v1.0.0
+- Basic curse system
+- Multiple curse type support
+- Flexible configuration options
+- Carrying detection system
+- Real-time UI display

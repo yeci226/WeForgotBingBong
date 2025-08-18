@@ -11,11 +11,11 @@ namespace Curse
   {
     private ushort bingBongItemID;
     private float curseInterval = 2f;
-    // private string curseType = "Poison";
     private bool showUI = true;
     private float curseIntensity = 1.0f;
     private float timer = 0f;
     private readonly Dictionary<Player, float> playerPickupTime = [];
+    private readonly Dictionary<Player, float> playerJoinTime = [];
     private const float PICKUP_DELAY = 0.5f;
 
     private readonly Dictionary<Player, List<MonoBehaviour>> activeCurses = [];
@@ -24,7 +24,6 @@ namespace Curse
     {
       bingBongItemID = itemID;
       curseInterval = interval;
-      // curseType = type;
       showUI = displayUI;
       curseIntensity = Plugin.Instance.curseIntensity.Value;
     }
@@ -32,6 +31,45 @@ namespace Curse
     public void UpdateCurseIntensity()
     {
       curseIntensity = Plugin.Instance.curseIntensity.Value;
+    }
+
+    void Start()
+    {
+      // 确保在组件启动时为当前已存在的玩家设置加入缓冲
+      StartCoroutine(InitializeBufferForExistingPlayers());
+    }
+
+    private System.Collections.IEnumerator InitializeBufferForExistingPlayers()
+    {
+      // 稍作等待，避免玩家对象尚未生成
+      yield return new WaitForSeconds(0.5f);
+
+      var players = UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None);
+      foreach (var player in players)
+      {
+        if (player == null) continue;
+        playerJoinTime[player] = Time.time;
+        if (Plugin.Instance.debugMode.Value)
+        {
+          Plugin.Logger.LogInfo($"[InitBuffer] Player {player.name} buffered at {Time.time:F1}s, duration {Plugin.Instance.playerJoinBufferTime.Value:F1}s");
+        }
+      }
+
+      // 再次尝试一遍，处理本地玩家延迟出现的情况
+      yield return new WaitForSeconds(1.0f);
+      players = UnityEngine.Object.FindObjectsByType<Player>(FindObjectsSortMode.None);
+      foreach (var player in players)
+      {
+        if (player == null) continue;
+        if (!playerJoinTime.ContainsKey(player))
+        {
+          playerJoinTime[player] = Time.time;
+          if (Plugin.Instance.debugMode.Value)
+          {
+            Plugin.Logger.LogInfo($"[RetryBuffer] Late player {player.name} buffered at {Time.time:F1}s");
+          }
+        }
+      }
     }
 
     private Player[] cachedPlayers = [];
@@ -78,33 +116,86 @@ namespace Curse
         bool localPlayerHolding = CheckIfPlayerHasBingBong(localPlayer);
         float localPlayerDistance = Vector3.Distance(localPlayer.transform.position, transform.position);
         UIManager.instance?.SetBingBongStatus(localPlayerHolding, localPlayerDistance);
-        // UIManager.instance?.SetCurseInfo(curseType, timer, curseInterval);
+      
+        string currentCurseType = GetCurrentCurseTypeDisplay();
+        UIManager.instance?.SetCurseInfo(currentCurseType, timer, curseInterval);
+        
+        // 更新缓冲时间信息到UI
+        bool isInBuffer = IsPlayerInBufferTime(localPlayer);
+        float remainingBufferTime = GetPlayerRemainingBufferTime(localPlayer);
+        UIManager.instance?.SetBufferTimeInfo(isInBuffer, remainingBufferTime);
+        
+        // 调试信息
+        if (Plugin.Instance.debugMode.Value)
+        {
+          Plugin.Logger.LogInfo($"[UI Update] Player: {localPlayer.name}, InBuffer: {isInBuffer}, Remaining: {remainingBufferTime:F1}s, Timer: {timer:F1}s");
+        }
       }
 
       if (!isHeldByAny)
       {
-        timer += Time.deltaTime;
+        // Check if any players are still in buffer time
+        bool anyPlayerInBuffer = false;
+        foreach (var player in cachedPlayers)
+        {
+          if (player != null && !IsPlayerReadyForCurse(player))
+          {
+            anyPlayerInBuffer = true;
+            if (Plugin.Instance.debugMode.Value)
+            {
+              Plugin.Logger.LogInfo($"[BufferCheck] Player {player.name} still in buffer");
+            }
+            break;
+          }
+        }
+        
         if (Plugin.Instance.debugMode.Value)
         {
-          Plugin.Logger.LogInfo($"诅咒计时器: {timer:F1}s / {curseInterval:F1}s");
+          Plugin.Logger.LogInfo($"[BufferCheck] AnyPlayerInBuffer: {anyPlayerInBuffer}, Timer: {timer:F1}s");
         }
-
-        if (timer >= curseInterval)
+        
+        if (!anyPlayerInBuffer)
         {
-          // Plugin.Logger.LogInfo($"开始施加诅咒，当前诅咒类型: {curseType}");
-
-          foreach (var player in cachedPlayers)
+          // 如果所有玩家都不在缓冲时间，但诅咒计时器为0，给所有玩家重新设置缓冲时间
+          if (timer == 0f)
           {
-            if (player != null)
+            foreach (var player in cachedPlayers)
             {
-              Plugin.Logger.LogInfo($"对玩家 {player.name ?? "Unknown"} 施加诅咒");
-              ApplyCurse(player);
+              if (player != null)
+              {
+                playerJoinTime[player] = Time.time;
+                if (Plugin.Instance.debugMode.Value)
+                {
+                  Plugin.Logger.LogInfo($"[RestartBuffer] Player {player.name} restarted buffer at {Time.time:F1}s");
+                }
+              }
             }
+            if (Plugin.Instance.debugMode.Value)
+            {
+              Plugin.Logger.LogInfo("[RestartBuffer] All players buffered, waiting...");
+            }
+            return; // 等待缓冲时间
           }
+          
+          timer += Time.deltaTime;
+          if (timer >= curseInterval)
+          {
+            if (Plugin.Instance.debugMode.Value)
+            {
+              Plugin.Logger.LogInfo($"[Curse] Timer reached {curseInterval}s, applying curses");
+            }
+            foreach (var player in cachedPlayers)
+            {
+              if (player != null && IsPlayerReadyForCurse(player))
+              {
+                ApplyCurse(player);
+              }
+            }
 
-          timer = 0f;
-          Plugin.Logger.LogInfo("诅咒施加完成，计时器重置");
+            timer = 0f;
+          }
         }
+
       }
       else
       {
@@ -131,6 +222,68 @@ namespace Curse
       {
         playerPickupTime[player] = Time.time;
       }
+    }
+
+    public void OnPlayerJoined(Player player)
+    {
+      if (player != null)
+      {
+        playerJoinTime[player] = Time.time;
+        if (Plugin.Instance.debugMode.Value)
+        {
+          Plugin.Logger.LogInfo($"Player {player.name} joined, buffer time started at {Time.time:F1}s, buffer duration: {Plugin.Instance.playerJoinBufferTime.Value:F1}s");
+        }
+      }
+    }
+
+    public float GetPlayerRemainingBufferTime(Player player)
+    {
+      if (player == null || !playerJoinTime.ContainsKey(player)) return 0f;
+      
+      float timeSinceJoin = Time.time - playerJoinTime[player];
+      float bufferTime = Plugin.Instance.playerJoinBufferTime.Value;
+      float remainingTime = bufferTime - timeSinceJoin;
+      
+      return Mathf.Max(0f, remainingTime);
+    }
+
+    public bool IsPlayerInBufferTime(Player player)
+    {
+      if (player == null) return false;
+      return playerJoinTime.ContainsKey(player) && GetPlayerRemainingBufferTime(player) > 0f;
+    }
+
+    private bool IsPlayerReadyForCurse(Player player)
+    {
+      if (player == null) return false;
+      
+      // Check if player has joined recently and is still in buffer time
+      if (playerJoinTime.ContainsKey(player))
+      {
+        float timeSinceJoin = Time.time - playerJoinTime[player];
+        float bufferTime = Plugin.Instance.playerJoinBufferTime.Value;
+        
+        if (Plugin.Instance.debugMode.Value)
+        {
+          Plugin.Logger.LogInfo($"Player {player.name} buffer check: timeSinceJoin={timeSinceJoin:F1}s, bufferTime={bufferTime:F1}s, remaining={bufferTime - timeSinceJoin:F1}s");
+        }
+        
+        if (timeSinceJoin < bufferTime)
+        {
+          return false;
+        }
+        else
+        {
+          // Remove from join time tracking after buffer expires
+          playerJoinTime.Remove(player);
+          if (Plugin.Instance.debugMode.Value)
+          {
+            Plugin.Logger.LogInfo($"Player {player.name} buffer time expired, removed from tracking");
+          }
+        }
+      }
+      
+      return true;
     }
 
     private bool CheckIfPlayerHasBingBong(Player player)
@@ -178,7 +331,9 @@ namespace Curse
         }
       }
 
-      if (!hasInAnySlotManual && !player.tempFullSlot.IsEmpty() && player.tempFullSlot.prefab != null)
+      // Check temporary item slot
+      if (!hasInAnySlotManual && Plugin.Instance.countTempSlotAsCarrying.Value && 
+          !player.tempFullSlot.IsEmpty() && player.tempFullSlot.prefab != null)
       {
         if (player.tempFullSlot.prefab.itemID == bingBongItemID)
         {
@@ -190,7 +345,10 @@ namespace Curse
         }
       }
 
-      if (!hasInAnySlotManual && player.backpackSlot.hasBackpack && !player.backpackSlot.IsEmpty() && player.backpackSlot.prefab != null)
+      // Check backpack
+      if (!hasInAnySlotManual && Plugin.Instance.countBackpackAsCarrying.Value && 
+          player.backpackSlot.hasBackpack && !player.backpackSlot.IsEmpty() && 
+          player.backpackSlot.prefab != null)
       {
         if (player.backpackSlot.prefab.itemID == bingBongItemID)
         {
@@ -202,10 +360,12 @@ namespace Curse
         }
       }
 
+      // Check nearby items
       bool hasNearby = false;
-      if (!hasInSlot && !hasInAnySlotManual)
+      if (!hasInSlot && !hasInAnySlotManual && Plugin.Instance.countNearbyAsCarrying.Value)
       {
-        var nearbyItems = Physics.OverlapSphere(player.transform.position, 2f);
+        float radius = Plugin.Instance.nearbyDetectionRadius.Value;
+        var nearbyItems = Physics.OverlapSphere(player.transform.position, radius);
         foreach (var collider in nearbyItems)
         {
           var item = collider.GetComponent<Item>();
@@ -236,105 +396,176 @@ namespace Curse
 
     private void ApplyCurseAlternative(Player player, string playerName)
     {
-      Plugin.Logger.LogInfo($"使用備用方法對玩家 {playerName} 施加詛咒");
-
       try
       {
         if (player.character != null && player.character.refs != null && player.character.refs.afflictions != null)
         {
-          Plugin.Logger.LogInfo($"通過player.character.refs找到玩家 {playerName} 的CharacterAfflictions組件");
-
-          CharacterAfflictions.STATUSTYPE[] availableCurses = [
-            CharacterAfflictions.STATUSTYPE.Poison,
-            // CharacterAfflictions.STATUSTYPE.Injury,
-            CharacterAfflictions.STATUSTYPE.Hunger,
-            CharacterAfflictions.STATUSTYPE.Drowsy,
-            // CharacterAfflictions.STATUSTYPE.Curse,
-            CharacterAfflictions.STATUSTYPE.Cold,
-            CharacterAfflictions.STATUSTYPE.Hot
-          ];
-
-          int randomIndex = UnityEngine.Random.Range(0, availableCurses.Length);
-          CharacterAfflictions.STATUSTYPE statusType = availableCurses[randomIndex];
-
-          Plugin.Logger.LogInfo($"隨機選擇的詛咒類型: {statusType} (索引: {randomIndex})");
-
-          switch (statusType)
+          // Select curse types based on configuration
+          var curseTypes = GetAvailableCurseTypes();
+          if (curseTypes.Count == 0)
           {
-            case CharacterAfflictions.STATUSTYPE.Poison:
-              player.character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Poison, 0.1f * curseIntensity, false);
-              Plugin.Logger.LogInfo($"對玩家 {playerName} 施加中毒詛咒，強度: {0.1f * curseIntensity}");
-              break;
-
-            case CharacterAfflictions.STATUSTYPE.Injury:
-              player.character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Injury, 0.05f * curseIntensity, false);
-              Plugin.Logger.LogInfo($"對玩家 {playerName} 施加受傷詛咒，強度: {0.05f * curseIntensity}");
-              break;
-
-            case CharacterAfflictions.STATUSTYPE.Hunger:
-              player.character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Hunger, 0.1f * curseIntensity, false);
-              Plugin.Logger.LogInfo($"對玩家 {playerName} 施加飢餓詛咒，強度: {0.1f * curseIntensity}");
-              break;
-
-            case CharacterAfflictions.STATUSTYPE.Drowsy:
-              player.character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Drowsy, 0.1f * curseIntensity, false);
-              Plugin.Logger.LogInfo($"對玩家 {playerName} 施加困倦詛咒，強度: {0.1f * curseIntensity}");
-              break;
-
-            case CharacterAfflictions.STATUSTYPE.Curse:
-              player.character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Curse, 0.1f * curseIntensity, false);
-              Plugin.Logger.LogInfo($"對玩家 {playerName} 施加詛咒狀態，強度: {0.1f * curseIntensity}");
-              break;
-
-            case CharacterAfflictions.STATUSTYPE.Cold:
-              player.character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Cold, 0.1f * curseIntensity, false);
-              Plugin.Logger.LogInfo($"對玩家 {playerName} 施加寒冷詛咒，強度: {0.1f * curseIntensity}");
-              break;
-
-            case CharacterAfflictions.STATUSTYPE.Hot:
-              player.character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Hot, 0.1f * curseIntensity, false);
-              Plugin.Logger.LogInfo($"對玩家 {playerName} 施加炎熱詛咒，強度: {0.1f * curseIntensity}");
-              break;
-
-            default:
-              player.character.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Poison, 0.1f * curseIntensity, false);
-              Plugin.Logger.LogInfo($"使用默認中毒詛咒對玩家 {playerName}，強度: {0.1f * curseIntensity}");
-              break;
+            return;
           }
+
+          var selectedCurses = SelectCurses(curseTypes);
+          
+          foreach (var curseType in selectedCurses)
+          {
+            ApplySpecificCurse(player, playerName, curseType);
+          }
+          
           return;
         }
 
-
-        if (Plugin.Instance.debugMode.Value)
+        var allComponents = player.GetComponents<Component>();
+        foreach (var comp in allComponents)
         {
-          var allComponents = player.GetComponents<Component>();
-          Plugin.Logger.LogInfo($"玩家 {playerName} 的所有組件:");
-          foreach (var comp in allComponents)
+          if (comp != null)
           {
-            if (comp != null)
-            {
-              Plugin.Logger.LogInfo($"  - {comp.GetType().Name}");
-            }
-          }
-
-          Plugin.Logger.LogInfo($"player.character: {player.character != null}");
-          if (player.character != null)
-          {
-            Plugin.Logger.LogInfo($"player.character.refs: {player.character.refs != null}");
-            if (player.character.refs != null)
-            {
-              Plugin.Logger.LogInfo($"player.character.refs.afflictions: {player.character.refs.afflictions != null}");
-            }
+            // 可以在这里添加组件检查逻辑
           }
         }
-
-        Plugin.Logger.LogError($"所有方法都無法找到玩家 {playerName} 的詛咒系統組件");
+        if (player.character != null)
+        {
+          if (player.character.refs != null)
+          {
+            // 可以在这里添加角色引用检查逻辑
+          }
+        }
       }
       catch (System.Exception ex)
       {
-        Plugin.Logger.LogError($"施加詛咒時發生錯誤: {ex.Message}");
-        Plugin.Logger.LogError($"錯誤堆疊: {ex.StackTrace}");
       }
+    }
+
+    private List<CharacterAfflictions.STATUSTYPE> GetAvailableCurseTypes()
+    {
+      var availableCurses = new List<CharacterAfflictions.STATUSTYPE>();
+      
+      if (Plugin.Instance.enablePoison.Value)
+        availableCurses.Add(CharacterAfflictions.STATUSTYPE.Poison);
+      if (Plugin.Instance.enableInjury.Value)
+        availableCurses.Add(CharacterAfflictions.STATUSTYPE.Injury);
+      if (Plugin.Instance.enableHunger.Value)
+        availableCurses.Add(CharacterAfflictions.STATUSTYPE.Hunger);
+      if (Plugin.Instance.enableDrowsy.Value)
+        availableCurses.Add(CharacterAfflictions.STATUSTYPE.Drowsy);
+      if (Plugin.Instance.enableCurse.Value)
+        availableCurses.Add(CharacterAfflictions.STATUSTYPE.Curse);
+      if (Plugin.Instance.enableCold.Value)
+        availableCurses.Add(CharacterAfflictions.STATUSTYPE.Cold);
+      if (Plugin.Instance.enableHot.Value)
+        availableCurses.Add(CharacterAfflictions.STATUSTYPE.Hot);
+      
+      return availableCurses;
+    }
+
+    private List<CharacterAfflictions.STATUSTYPE> SelectCurses(List<CharacterAfflictions.STATUSTYPE> availableCurses)
+    {
+      var selectedCurses = new List<CharacterAfflictions.STATUSTYPE>();
+      
+      switch (Plugin.Instance.curseSelectionMode.Value)
+      {
+        case Plugin.CurseSelectionMode.Single:
+          // Single curse type
+          var singleType = GetCurseTypeFromString(Plugin.Instance.singleCurseType.Value);
+          if (availableCurses.Contains(singleType))
+          {
+            selectedCurses.Add(singleType);
+          }
+          else if (availableCurses.Count > 0)
+          {
+            selectedCurses.Add(availableCurses[0]); // Fallback to first available type
+          }
+          break;
+          
+        case Plugin.CurseSelectionMode.Random:
+          // Random selection
+          if (availableCurses.Count > 0)
+          {
+            int randomIndex = UnityEngine.Random.Range(0, availableCurses.Count);
+            selectedCurses.Add(availableCurses[randomIndex]);
+          }
+          break;
+          
+        case Plugin.CurseSelectionMode.Multiple:
+          // Multiple curses
+          selectedCurses.AddRange(availableCurses);
+          break;
+      }
+      
+      return selectedCurses;
+    }
+
+    private CharacterAfflictions.STATUSTYPE GetCurseTypeFromString(string curseTypeString)
+    {
+      return curseTypeString.ToLower() switch
+      {
+        "poison" => CharacterAfflictions.STATUSTYPE.Poison,
+        "injury" => CharacterAfflictions.STATUSTYPE.Injury,
+        "hunger" => CharacterAfflictions.STATUSTYPE.Hunger,
+        "drowsy" => CharacterAfflictions.STATUSTYPE.Drowsy,
+        "curse" => CharacterAfflictions.STATUSTYPE.Curse,
+        "cold" => CharacterAfflictions.STATUSTYPE.Cold,
+        "hot" => CharacterAfflictions.STATUSTYPE.Hot,
+        _ => CharacterAfflictions.STATUSTYPE.Poison
+      };
+    }
+
+    private void ApplySpecificCurse(Player player, string playerName, CharacterAfflictions.STATUSTYPE curseType)
+    {
+      float finalIntensity = GetFinalIntensityForCurseType(curseType);
+      
+      player.character.refs.afflictions.AddStatus(curseType, finalIntensity, false);
+      
+    }
+
+    private float GetFinalIntensityForCurseType(CharacterAfflictions.STATUSTYPE curseType)
+    {
+      return curseType switch
+      {
+        CharacterAfflictions.STATUSTYPE.Poison => Plugin.Instance.poisonIntensity.Value,
+        CharacterAfflictions.STATUSTYPE.Injury => Plugin.Instance.injuryIntensity.Value,
+        CharacterAfflictions.STATUSTYPE.Hunger => Plugin.Instance.hungerIntensity.Value,
+        CharacterAfflictions.STATUSTYPE.Drowsy => Plugin.Instance.drowsyIntensity.Value,
+        CharacterAfflictions.STATUSTYPE.Curse => Plugin.Instance.curseStatusIntensity.Value,
+        CharacterAfflictions.STATUSTYPE.Cold => Plugin.Instance.coldIntensity.Value,
+        CharacterAfflictions.STATUSTYPE.Hot => Plugin.Instance.hotIntensity.Value,
+        _ => 0.1f
+      };
+    }
+
+    private string GetCurrentCurseTypeDisplay()
+    {
+      var availableCurses = GetAvailableCurseTypes();
+      if (availableCurses.Count == 0) return "No Curse";
+      
+      switch (Plugin.Instance.curseSelectionMode.Value)
+      {
+        case Plugin.CurseSelectionMode.Single:
+          return GetCurseTypeDisplayName(GetCurseTypeFromString(Plugin.Instance.singleCurseType.Value));
+        case Plugin.CurseSelectionMode.Random:
+          return "Random Curse";
+        case Plugin.CurseSelectionMode.Multiple:
+          return "Multiple Curse";
+        default:
+          return "Unknown Mode";
+      }
+    }
+
+    private string GetCurseTypeDisplayName(CharacterAfflictions.STATUSTYPE curseType)
+    {
+      return curseType switch
+      {
+        CharacterAfflictions.STATUSTYPE.Poison => "Poison ",
+        CharacterAfflictions.STATUSTYPE.Injury => "Injury",
+        CharacterAfflictions.STATUSTYPE.Hunger => "Hunger",
+        CharacterAfflictions.STATUSTYPE.Drowsy => "Drowsy",
+        CharacterAfflictions.STATUSTYPE.Curse => "Curse",
+        CharacterAfflictions.STATUSTYPE.Cold => "Cold",
+        CharacterAfflictions.STATUSTYPE.Hot => "Hot",
+        _ => "Unknown"
+      };
     }
 
     void ClearCurse(Player player)

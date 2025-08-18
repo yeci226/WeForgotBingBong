@@ -11,6 +11,8 @@ namespace Giu
     private string currentCurseType = "None";
     private float curseTimer = 0f;
     private float curseInterval = 2f;
+    private bool isInBuffer = false;
+    private float remainingBufferTime = 0f;
 
     void Awake()
     {
@@ -30,6 +32,12 @@ namespace Giu
       isHeld = held;
       distance = dist;
       hasValidData = true;
+    }
+
+    public void SetBufferTimeInfo(bool inBuffer, float remainingTime)
+    {
+      isInBuffer = inBuffer;
+      remainingBufferTime = remainingTime;
     }
 
     public void SetCurseInfo(string curseType, float timer, float interval)
@@ -68,7 +76,13 @@ namespace Giu
       GUI.color = Color.white;
       GUI.Label(new Rect(20, 45, 340, 20), $"詛咒類型: {currentCurseType}");
 
-      if (!isHeld)
+      // 显示缓冲时间状态
+      if (isInBuffer)
+      {
+        GUI.color = Color.cyan;
+        GUI.Label(new Rect(20, 65, 340, 20), $"🛡️ 缓冲时间: {remainingBufferTime:F1}s 剩余");
+      }
+      else if (!isHeld)
       {
         float progress = curseTimer / curseInterval;
         GUI.color = Color.yellow;
