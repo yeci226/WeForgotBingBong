@@ -1,7 +1,7 @@
 {
   "name": "WeForgotBingBong",
-  "version_number": "0.1.0",
+  "version_number": "0.1.2",
   "website_url": "https://github.com/yeci226/WeForgotBingBong",
-  "description": "We shouldn't leave poor Bing Bong alone on the island, we should help Bing Bong escape from the island!",
+  "description": "We can't leave poor Bing Bong alone on the island, or we'll be exposed to a lot of negative influence",
   "dependencies": ["BepInEx-BepInExPack_PEAK-5.4.75301"]
 }

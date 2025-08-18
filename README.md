@@ -1,7 +1,13 @@
 # We Forgot Bing Bong
 
 We shouldn't leave poor Bing Bong alone on the island, we should help Bing Bong escape from the island! <br>
+
 As long as someone carries Bing Bong, we're safe.
+![image](https://raw.githubusercontent.com/yeci226/WeForgotBingBong/refs/heads/main/1.png)
+No Bing Bong? We died
+![image](https://raw.githubusercontent.com/yeci226/WeForgotBingBong/refs/heads/main/2.png)
+![image](https://raw.githubusercontent.com/yeci226/WeForgotBingBong/refs/heads/main/3.png)
+
 
 ## Features:
 - Force players to carry Bing Bong 
